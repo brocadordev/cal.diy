@@ -47,6 +47,8 @@ These two routes accept only the admin API key. They return 401 for all other au
 - `POST /v2/bookings/bulk-reschedule` moves each booking in `items` to an event type and a new start. Each item has `uid`, `eventTypeId`, `start` and an optional `lengthInMinutes`. There is no item limit.
 - A move keeps the uid, attendees, metadata and recurring id of the booking. It changes the host to the owner of the event type. It also changes the event type, the start, the end and `userPrimaryEmail`. The end is the start plus `lengthInMinutes`, or plus the event type length.
 - One database transaction writes all the moves. If one item fails, no booking changes.
+- A move also sets a new idempotency key from the new host and the new times. Thus a new booking can use the old slot of the old host.
+- The route accepts a JSON body of up to 5 MB. All other routes keep the 100 kB limit.
 - These items give 400 with `error.code` set to `bulk_reschedule_invalid`: an unknown uid, a duplicate uid, an unknown event type, an event type without an owner, a booking that is not accepted or that started, and a start in the past.
 - An accepted booking that is already at its target is a no-op. The API does this check after the uid and event type checks, and before the other checks. A cancelled booking at its target gives 400.
 - A new time must be fully in the default schedule of the new host, with the date overrides. A host without a default schedule has no free time.
