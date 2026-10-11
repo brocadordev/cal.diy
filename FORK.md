@@ -35,6 +35,27 @@ This fork runs Cal.diy as an API-only backend for a chatbot server. Only that se
 - The reschedule accepts an optional `lengthInMinutes` with any value. Without it, the new booking gets the length of the event type.
 - A reschedule to another host does not remove the old host's external calendar event. Fix this before calendar sync.
 
+## Bulk routes
+
+These two routes accept only the admin API key. They return 401 for all other authorization.
+
+- `POST /v2/users/bulk-calendars` gets `userIds`, `start` and an optional `end`. Without `end`, the range has no end.
+- The response has one calendar for each user, in the request order. A calendar has the time zone, the weekly hours of the default schedule and all the event types of the user, also the hidden ones.
+- A calendar also has each accepted or cancelled booking of the user that overlaps the range. `rescheduled` is true for a booking that a reschedule cancelled. `fromReschedule` is the uid of the booking that the booking replaced. `eventTypeId` is null if the event type was deleted.
+- A user without a default schedule gets an empty `availability`.
+- An unknown or deleted user gives 400 with `error.code` set to `bulk_calendars_invalid`. `error.details.userIds` has the ids.
+- `POST /v2/bookings/bulk-reschedule` moves each booking in `items` to an event type and a new start. Each item has `uid`, `eventTypeId`, `start` and an optional `lengthInMinutes`. There is no item limit.
+- A move keeps the uid, attendees, metadata and recurring id of the booking. It changes the host to the owner of the event type. It also changes the event type, the start, the end and `userPrimaryEmail`. The end is the start plus `lengthInMinutes`, or plus the event type length.
+- One database transaction writes all the moves. If one item fails, no booking changes.
+- These items give 400 with `error.code` set to `bulk_reschedule_invalid`: an unknown uid, a duplicate uid, an unknown event type, an event type without an owner, a booking that is not accepted or that started, and a start in the past.
+- An accepted booking that is already at its target is a no-op. The API does this check after the uid and event type checks, and before the other checks. A cancelled booking at its target gives 400.
+- A new time must be fully in the default schedule of the new host, with the date overrides. A host without a default schedule has no free time.
+- A new time must not overlap the accepted bookings of the host that are not in the request. Two new times of the same host must not overlap. The time of a no-op blocks the other items. If a new time is not free, the API returns 409 with `error.code` set to `bulk_reschedule_conflict`.
+- The free time check ignores buffers, minimum notice, slot steps, out of office, booking limits and seats.
+- A move sends no emails, webhooks or reminders. It does not change external calendar events.
+- Both errors list each failing uid in `error.details.uids`. A schema error keeps the global 400.
+- The checks read the database before the write transaction. A booking that another request makes at the same time can overlap a move. The chatbot server sends all its writes through one queue for each organization, so its own writes do not overlap.
+
 ## Defaults
 
 - Emails are disabled by default.

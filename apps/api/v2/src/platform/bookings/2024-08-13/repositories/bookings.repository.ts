@@ -1,5 +1,6 @@
 import { bookingWithUserAndEventDetailsSelect } from "@calcom/platform-libraries/bookings";
 import type { Prisma } from "@calcom/prisma/client";
+import type { BookingStatus } from "@calcom/prisma/enums";
 import { Injectable } from "@nestjs/common";
 import { PrismaReadService } from "@/modules/prisma/prisma-read.service";
 import { PrismaWriteService } from "@/modules/prisma/prisma-write.service";
@@ -251,5 +252,49 @@ export class BookingsRepository_2024_08_13 {
       data: body,
       select: { uid: true },
     });
+  }
+
+  async getByUids(uids: string[]) {
+    return this.dbRead.prisma.booking.findMany({
+      where: { uid: { in: uids } },
+      select: { uid: true, userId: true, eventTypeId: true, startTime: true, endTime: true, status: true },
+    });
+  }
+
+  async getByUserIdsAndStatusesInRange(
+    userIds: number[],
+    statuses: BookingStatus[],
+    start: Date,
+    end?: Date
+  ) {
+    return this.dbRead.prisma.booking.findMany({
+      where: {
+        userId: { in: userIds },
+        status: { in: statuses },
+        endTime: { gt: start },
+        ...(end && { startTime: { lt: end } }),
+      },
+      select: {
+        uid: true,
+        userId: true,
+        eventTypeId: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        rescheduled: true,
+        fromReschedule: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { startTime: "asc" },
+    });
+  }
+
+  async updateByUids(updates: { uid: string; data: Prisma.BookingUncheckedUpdateInput }[]) {
+    return this.dbWrite.prisma.$transaction(
+      updates.map(({ uid, data }) =>
+        this.dbWrite.prisma.booking.update({ where: { uid }, data, select: { uid: true } })
+      )
+    );
   }
 }

@@ -20,6 +20,7 @@ import {
 import { ApiOperation, ApiTags as DocsTags } from "@nestjs/swagger";
 import { plainToInstance } from "class-transformer";
 import { API_VERSIONS_VALUES } from "@/lib/api-versions";
+import { BulkCalendarsInput } from "@/modules/admin-users/inputs/bulk-calendars.input";
 import { AdminUsersService } from "@/modules/admin-users/services/admin-users.service";
 import { AdminApiKeyGuard } from "@/modules/auth/guards/admin-api-key/admin-api-key.guard";
 import { GetManagedUserOutput } from "@/modules/oauth-clients/controllers/oauth-client-users/outputs/get-managed-user.output";
@@ -52,6 +53,13 @@ export class AdminUsersController {
     const user = await this.adminUsersService.createUser(body);
 
     return { status: SUCCESS_STATUS, data: this.toOutput(user) };
+  }
+
+  @Post("/bulk-calendars")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Get the schedule, event types and bookings of many users" })
+  async getBulkCalendars(@Body() body: BulkCalendarsInput) {
+    return { status: SUCCESS_STATUS, data: await this.adminUsersService.getBulkCalendars(body) };
   }
 
   @Get("/")
