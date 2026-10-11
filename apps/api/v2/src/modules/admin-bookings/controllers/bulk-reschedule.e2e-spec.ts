@@ -58,7 +58,8 @@ describe("POST /v2/bookings/bulk-reschedule", () => {
     userRepositoryFixture = new UserRepositoryFixture(moduleRef);
     bookingsRepositoryFixture = new BookingsRepositoryFixture(moduleRef);
     const eventTypesRepositoryFixture = new EventTypesRepositoryFixture(moduleRef);
-    app = moduleRef.createNestApplication();
+    // main.ts turns off the Nest body parser, so the body middleware of the app parses the JSON.
+    app = moduleRef.createNestApplication({ bodyParser: false });
     bootstrap(app as NestExpressApplication);
     await app.init();
 
@@ -131,6 +132,20 @@ describe("POST /v2/bookings/bulk-reschedule", () => {
       code: "bulk_reschedule_invalid",
       details: { uids: [unknownUid, uids.move, uids.other] },
     });
+  });
+
+  it("accepts a body over the 100 kB default of the JSON parser", async () => {
+    const items = Array.from({ length: 1500 }, (_, i) => ({
+      uid: `${uniqueName("unknown")}-${i}`,
+      eventTypeId: eventTypeIds[1],
+      start: "2030-01-07T10:00:00Z",
+    }));
+    expect(JSON.stringify({ items }).length).toBeGreaterThan(100 * 1024);
+
+    const { body } = await bulkReschedule(items).expect(400);
+
+    expect(body.error.code).toBe("bulk_reschedule_invalid");
+    expect(body.error.details.uids).toHaveLength(1500);
   });
 
   it("moves the bookings in place and skips a no-op", async () => {
