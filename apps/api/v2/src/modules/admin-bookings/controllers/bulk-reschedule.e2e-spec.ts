@@ -1,3 +1,4 @@
+import { IdempotencyKeyService } from "@calcom/platform-libraries/bookings";
 import { BookingStatus } from "@calcom/prisma/enums";
 import type { INestApplication } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
@@ -33,6 +34,25 @@ describe("POST /v2/bookings/bulk-reschedule", () => {
       .set("Authorization", `Bearer ${key}`)
       .send({ items });
 
+  const createBooking = (uid: string, host: number, start: string, end: string) =>
+    bookingsRepositoryFixture.create({
+      uid,
+      title: uid,
+      startTime: new Date(start),
+      endTime: new Date(end),
+      status: BookingStatus.ACCEPTED,
+      // The booking flow sets this key in a Prisma extension that the API client does not have.
+      idempotencyKey: IdempotencyKeyService.generate({
+        startTime: new Date(start),
+        endTime: new Date(end),
+        userId: hosts[host].id,
+      }),
+      metadata: { chatbotBookingId: uid },
+      user: { connect: { id: hosts[host].id } },
+      eventType: { connect: { id: eventTypeIds[host] } },
+      attendees: { create: { name: "Guest", email: `${uid}@guest.com`, timeZone: "UTC" } },
+    });
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     userRepositoryFixture = new UserRepositoryFixture(moduleRef);
@@ -64,18 +84,6 @@ describe("POST /v2/bookings/bulk-reschedule", () => {
       eventTypeIds.push(eventType.id);
     }
 
-    const createBooking = (uid: string, host: number, start: string, end: string) =>
-      bookingsRepositoryFixture.create({
-        uid,
-        title: uid,
-        startTime: new Date(start),
-        endTime: new Date(end),
-        status: BookingStatus.ACCEPTED,
-        metadata: { chatbotBookingId: uid },
-        user: { connect: { id: hosts[host].id } },
-        eventType: { connect: { id: eventTypeIds[host] } },
-        attendees: { create: { name: "Guest", email: `${uid}@guest.com`, timeZone: "UTC" } },
-      });
     await createBooking(uids.move, 0, "2030-01-07T10:00:00.000Z", "2030-01-07T10:30:00.000Z");
     await createBooking(uids.noop, 0, "2030-01-07T11:00:00.000Z", "2030-01-07T11:30:00.000Z");
     await createBooking(uids.blocker, 1, "2030-01-07T14:00:00.000Z", "2030-01-07T15:00:00.000Z");
@@ -151,5 +159,19 @@ describe("POST /v2/bookings/bulk-reschedule", () => {
       attendees: [expect.objectContaining({ email: `${uids.move}@guest.com` })],
     });
     expect((await bookingsRepositoryFixture.getByUid(uids.noop))?.updatedAt).toEqual(noopBefore?.updatedAt);
+  });
+
+  it("gives a moved booking the key of its new host and times, so the old slot can be booked again", async () => {
+    expect((await bookingsRepositoryFixture.getByUid(uids.move))?.idempotencyKey).toBe(
+      IdempotencyKeyService.generate({
+        startTime: new Date("2030-01-07T10:00:00.000Z"),
+        endTime: new Date("2030-01-07T11:00:00.000Z"),
+        userId: hosts[1].id,
+      })
+    );
+
+    await expect(
+      createBooking(uniqueName("old-slot"), 0, "2030-01-07T10:00:00.000Z", "2030-01-07T10:30:00.000Z")
+    ).resolves.toMatchObject({ userId: hosts[0].id });
   });
 });

@@ -1,4 +1,14 @@
 // Stub the dependencies so the test does not load Prisma and the platform libraries.
+jest.mock(
+  "@calcom/platform-libraries/bookings",
+  () => ({
+    IdempotencyKeyService: {
+      generate: ({ startTime, endTime, userId }: { startTime: Date; endTime: Date; userId: number }) =>
+        `${userId}.${startTime.toISOString()}.${endTime.toISOString()}`,
+    },
+  }),
+  { virtual: true }
+);
 jest.mock("@calcom/platform-libraries/schedules", () => ({ getWorkingHoursInMillis: jest.fn() }), {
   virtual: true,
 });
@@ -129,6 +139,7 @@ describe("AdminBookingsService", () => {
           startTime: date("10:00"),
           endTime: date("10:30"),
           userPrimaryEmail: "alice@example.com",
+          idempotencyKey: "1.2030-01-07T10:00:00.000Z.2030-01-07T10:30:00.000Z",
         },
       },
     ]);

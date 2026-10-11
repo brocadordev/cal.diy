@@ -1,3 +1,4 @@
+import { IdempotencyKeyService } from "@calcom/platform-libraries/bookings";
 import { getWorkingHoursInMillis } from "@calcom/platform-libraries/schedules";
 import { BookingStatus } from "@calcom/prisma/enums";
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
@@ -71,6 +72,12 @@ export class AdminBookingsService {
             startTime: new Date(start),
             endTime: new Date(end),
             userPrimaryEmail: owner.email,
+            // The key comes from the host and the times, so the old key would block a new booking at the old slot.
+            idempotencyKey: IdempotencyKeyService.generate({
+              startTime: new Date(start),
+              endTime: new Date(end),
+              userId: owner.id,
+            }),
           },
         }))
     );
