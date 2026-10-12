@@ -422,7 +422,7 @@ export class BookingRecurrence_2024_08_13 {
   @ApiProperty({
     example: 10,
     description:
-      "The number of calendar dates to make, from the start date. For daily and monthly, the dates outside the working hours of the user are not booked.",
+      "The number of calendar dates to make, from the start date. For daily and monthly, the dates outside the working hours of the user are not booked. For all frequencies, the dates with a holiday block of the user are not booked.",
   })
   @IsInt()
   @Min(2)
