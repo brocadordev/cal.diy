@@ -265,7 +265,8 @@ export class BookingsRepository_2024_08_13 {
     userIds: number[],
     statuses: BookingStatus[],
     start: Date,
-    end?: Date
+    end?: Date,
+    metadata?: { key: string; equals: string }
   ) {
     return this.dbRead.prisma.booking.findMany({
       where: {
@@ -273,6 +274,7 @@ export class BookingsRepository_2024_08_13 {
         status: { in: statuses },
         endTime: { gt: start },
         ...(end && { startTime: { lt: end } }),
+        ...(metadata && { metadata: { path: [metadata.key], equals: metadata.equals } }),
       },
       select: {
         uid: true,

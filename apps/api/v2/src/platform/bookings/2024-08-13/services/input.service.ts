@@ -17,6 +17,7 @@ import type {
 import type { BookingInputLocation_2024_08_13 } from "@calcom/platform-types/bookings/2024-08-13/inputs/location.input";
 import type { UpdateBookingInputLocation_2024_08_13 } from "@calcom/platform-types/bookings/2024-08-13/inputs/update-location.input";
 import type { EventType } from "@calcom/prisma/client";
+import { BookingStatus } from "@calcom/prisma/enums";
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { isPhoneNumber, isURL } from "class-validator";
@@ -447,10 +448,13 @@ export class InputBookingsService_2024_08_13 {
     const allStartTimes = Array.from({ length: count }, (_, i) =>
       firstStartTime.plus({ [FREQUENCY_UNITS[frequency]]: i * interval })
     );
-    const startTimes =
+    const workingStartTimes =
       recurrence && (frequency === FrequencyInput.daily || frequency === FrequencyInput.monthly)
         ? await this.removeDatesOutsideWorkingHours(eventType, allStartTimes, lengthInMinutes)
         : allStartTimes;
+    const startTimes = recurrence
+      ? await this.removeHolidayDates(eventType, workingStartTimes, lengthInMinutes)
+      : workingStartTimes;
 
     const guests =
       inputBooking.guests && platformClientId
@@ -548,6 +552,35 @@ export class InputBookingsService_2024_08_13 {
         i === 0 || workingHours.some((range) => range.start <= start && start + lengthInMillis <= range.end)
       );
     });
+  }
+
+  // The holiday filter runs before the free check of all occurrences, so a holiday block does not fail the repeat.
+  private async removeHolidayDates(
+    eventType: EventTypeWithOwnerAndTeam,
+    startTimes: DateTime[],
+    lengthInMinutes: number
+  ) {
+    if (!eventType.owner) return startTimes;
+
+    const lengthInMillis = lengthInMinutes * 60_000;
+    const holidays = await this.bookingsRepository.getByUserIdsAndStatusesInRange(
+      [eventType.owner.id],
+      [BookingStatus.ACCEPTED],
+      startTimes[0].toJSDate(),
+      new Date(startTimes[startTimes.length - 1].toMillis() + lengthInMillis),
+      { key: "chatbotHoliday", equals: "true" }
+    );
+    // ponytail: scans all holidays for each date, at most 366 dates. Use a binary search if the limit grows.
+    const isHoliday = (startTime: DateTime) => {
+      const start = startTime.toMillis();
+      return holidays.some(
+        (holiday) => holiday.startTime.getTime() < start + lengthInMillis && holiday.endTime.getTime() > start
+      );
+    };
+
+    // The first date always stays. A holiday on it fails the request as a single booking that is not available.
+    if (isHoliday(startTimes[0])) throw new Error("no_available_users_found_error");
+    return startTimes.filter((startTime, i) => i === 0 || !isHoliday(startTime));
   }
 
   async createRescheduleBookingRequest(

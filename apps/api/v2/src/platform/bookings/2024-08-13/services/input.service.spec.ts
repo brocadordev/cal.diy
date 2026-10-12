@@ -44,11 +44,15 @@ describe("InputBookingsService_2024_08_13 recurrence", () => {
     recurringEvent: null,
     scheduleId: null,
     schedulingType: null,
-    owner: { timeZone, defaultScheduleId: 5 },
+    owner: { id: 7, timeZone, defaultScheduleId: 5 },
   } as unknown as EventTypeWithOwnerAndTeam;
+  const getHolidays = jest.fn().mockResolvedValue([]);
   const service: InputBookingsService_2024_08_13 = Object.assign(
     Object.create(InputBookingsService_2024_08_13.prototype),
-    { schedulesRepository: { getScheduleById: async () => ({ timeZone, availability: [] }) } }
+    {
+      schedulesRepository: { getScheduleById: async () => ({ timeZone, availability: [] }) },
+      bookingsRepository: { getByUserIdsAndStatusesInRange: getHolidays },
+    }
   );
   const millis = (iso: string) => new Date(iso).getTime();
   const attendee = { name: "Ana", email: "ana@example.com", timeZone: "Europe/Lisbon" };
@@ -96,6 +100,38 @@ describe("InputBookingsService_2024_08_13 recurrence", () => {
       "2027-01-03T15:00:00.000-03:00",
     ]);
     expect(fromSaturday).toHaveLength(2);
+  });
+
+  it("removes the dates with a holiday block for each frequency but fails on a holiday on the first date", async () => {
+    jest.mocked(getWorkingHoursInMillis).mockReturnValue([{ start: 0, end: millis("2028-01-01") }]);
+    const holiday = {
+      startTime: new Date("2027-01-15T03:00:00Z"),
+      endTime: new Date("2027-01-16T03:00:00Z"),
+    };
+    getHolidays.mockResolvedValue([holiday]);
+
+    const weekly = await transform("2027-01-08T18:00:00Z", FrequencyInput.weekly, 3);
+    const daily = await transform("2027-01-14T18:00:00Z", FrequencyInput.daily, 3);
+
+    expect(weekly.map((event) => event.start)).toEqual([
+      "2027-01-08T15:00:00.000-03:00",
+      "2027-01-22T15:00:00.000-03:00",
+    ]);
+    expect(daily.map((event) => event.start)).toEqual([
+      "2027-01-14T15:00:00.000-03:00",
+      "2027-01-16T15:00:00.000-03:00",
+    ]);
+    expect(getHolidays).toHaveBeenCalledWith(
+      [7],
+      ["ACCEPTED"],
+      new Date("2027-01-08T18:00:00Z"),
+      new Date("2027-01-22T19:00:00Z"),
+      { key: "chatbotHoliday", equals: "true" }
+    );
+    await expect(transform("2027-01-15T18:00:00Z", FrequencyInput.monthly, 2)).rejects.toThrow(
+      "no_available_users_found_error"
+    );
+    getHolidays.mockResolvedValue([]);
   });
 
   it("keeps the attendee time zone and all the dates for a recurrence of the event type", async () => {
