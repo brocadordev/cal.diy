@@ -24,6 +24,8 @@ This fork runs Cal.diy as an API-only backend for a chatbot server. Only that se
 - `count` is the number of calendar dates to make, from 2 to 366. A repeat of 1 year stops at 1 year.
 - The API calculates the dates in the time zone of the user. A monthly date keeps the day of the month. If a month does not have that day, the API uses the last day of the month.
 - For `daily` and `monthly`, the API removes each date that is not fully in the working hours of the user. It never removes the first date.
+- For all frequencies, the API removes each date that overlaps a holiday block of the user. A holiday block is an accepted booking with `metadata.chatbotHoliday` set to `'true'`. The API never removes the first date. If the first date overlaps a holiday block, the API answers as for a single booking that is not available.
+- The API removes the holiday dates before the check of all occurrences. Thus a holiday block does not cause `occurrence_unavailable`.
 - A recurrence of the event type (`recurringEvent`) keeps the upstream behavior. The dates use the time zone of the attendee, and the API removes no date.
 - The API checks all occurrences before it writes the first occurrence. If an occurrence is not available, the API returns 400 with `error.code` set to `occurrence_unavailable`. It makes no booking.
 - If the write of an occurrence fails, the API cancels the occurrences that the request wrote. For a seated event type, it cancels only the seats of the request. If a cancel fails, the API logs it and continues. The response has the error of the write.
