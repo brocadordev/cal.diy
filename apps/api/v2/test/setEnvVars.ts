@@ -16,6 +16,7 @@ const env: Partial<Omit<Environment, "NODE_ENV">> = {
   STRIPE_WEBHOOK_SECRET: "whsec_51J4",
   IS_E2E: "true",
   API_KEY_PREFIX: "cal_test_",
+  ADMIN_API_KEY: "e2e-admin-api-key",
   GET_LICENSE_KEY_URL: " https://console.cal.com/api/license",
   CALCOM_LICENSE_KEY: "c4234812-12ab-42s6-a1e3-55bedd4a5bb7",
   RATE_LIMIT_DEFAULT_TTL_MS: 60000,

@@ -43,6 +43,7 @@ export type Environment = {
   USE_POOL: string;
   VERCEL: string;
   ENABLE_ASYNC_TASKER: string;
+  ADMIN_API_KEY: string;
 };
 
 export const getEnv = <K extends keyof Environment>(key: K, fallback?: Environment[K]): Environment[K] => {

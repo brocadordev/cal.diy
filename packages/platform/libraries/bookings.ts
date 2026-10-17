@@ -27,3 +27,5 @@ export { addGuestsHandler } from "@calcom/trpc/server/routers/viewer/bookings/ad
 export function makeUserActor(_uuid: string): { type: string; actorId: string } {
   return { type: "user", actorId: _uuid };
 }
+
+export { IdempotencyKeyService } from "@calcom/lib/idempotencyKey/idempotencyKeyService";

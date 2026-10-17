@@ -329,6 +329,23 @@ export function buildDateRanges({
   return { dateRanges: dateRanges.flat(), oooExcludedDateRanges: oooExcludedDateRanges.flat() };
 }
 
+// API v2 has no Dayjs, so it gets plain dates in and millis out.
+export function getWorkingHoursInMillis(input: {
+  availability: Parameters<typeof buildDateRanges>[0]["availability"];
+  timeZone: string;
+  dateFrom: Date;
+  dateTo: Date;
+}) {
+  const { dateRanges } = buildDateRanges({
+    availability: input.availability,
+    timeZone: input.timeZone,
+    dateFrom: dayjs(input.dateFrom),
+    dateTo: dayjs(input.dateTo),
+    travelSchedules: [],
+  });
+  return dateRanges.map(({ start, end }) => ({ start: start.valueOf(), end: end.valueOf() }));
+}
+
 export function groupByDate(ranges: DateRange[]): { [x: string]: DateRange[] } {
   const results = ranges.reduce(
     (

@@ -1,4 +1,4 @@
-import { isApiKey } from "@/lib/api-key";
+import { isAdminApiKey, isApiKey } from "@/lib/api-key";
 import { Permissions } from "@/modules/auth/decorators/permissions/permissions.decorator";
 import { OAuthClientRepository } from "@/modules/oauth-clients/oauth-client.repository";
 import { OAuthClientsOutputService } from "@/modules/oauth-clients/services/oauth-clients/oauth-clients-output.service";
@@ -33,6 +33,10 @@ export class PermissionsGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const bearerToken = request.get("Authorization")?.replace("Bearer ", "");
+    if (isAdminApiKey(bearerToken)) {
+      return true;
+    }
+
     const nextAuthSecret = this.config.get("next.authSecret", { infer: true });
     const nextAuthToken = await getToken({ req: request, secret: nextAuthSecret });
     const oAuthClientId = request.params?.clientId || request.get(X_CAL_CLIENT_ID);

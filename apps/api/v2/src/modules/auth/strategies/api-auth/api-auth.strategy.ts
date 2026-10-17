@@ -1,4 +1,4 @@
-import { sha256Hash, isApiKey, stripApiKey } from "@/lib/api-key";
+import { sha256Hash, isAdminApiKey, isApiKey, stripApiKey, X_CAL_USER_ID } from "@/lib/api-key";
 import { AuthMethods } from "@/lib/enums/auth-methods";
 import { isOriginAllowed } from "@/lib/is-origin-allowed/is-origin-allowed";
 import { BaseStrategy } from "@/lib/passport/strategies/types";
@@ -58,6 +58,11 @@ export class ApiAuthStrategy extends PassportStrategy(BaseStrategy, "api-auth") 
       const oAuthClientSecret = request.get(X_CAL_SECRET_KEY);
       const oAuthClientId = params.clientId || request.get(X_CAL_CLIENT_ID);
       const bearerToken = request.get("Authorization")?.replace("Bearer ", "");
+
+      if (isAdminApiKey(bearerToken)) {
+        request.authMethod = AuthMethods["API_KEY"];
+        return this.success(this.getSuccessUser(await this.adminApiKeyStrategy(request)));
+      }
 
       const allowedMethods = request.allowedAuthMethods;
       const noSpecificAuthExpected = !allowedMethods || !allowedMethods.length;
@@ -254,6 +259,20 @@ export class ApiAuthStrategy extends PassportStrategy(BaseStrategy, "api-auth") 
 
     const user: UserWithProfile | null = await this.userRepository.findByIdWithProfile(apiKeyOwnerId);
     request.organizationId = keyData.teamId;
+
+    return user;
+  }
+
+  async adminApiKeyStrategy(request: ApiAuthGuardRequest): Promise<UserWithProfile> {
+    const userId = Number(request.get(X_CAL_USER_ID));
+    const user = Number.isInteger(userId) ? await this.userRepository.findByIdWithProfile(userId) : null;
+    if (!user) {
+      throw new UnauthorizedException(
+        `ApiAuthStrategy - admin api key - No user found for the '${X_CAL_USER_ID}' header`
+      );
+    }
+
+    request.organizationId = this.usersService.getUserMainOrgId(user) as number;
 
     return user;
   }

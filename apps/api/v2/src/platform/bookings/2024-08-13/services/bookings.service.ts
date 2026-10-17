@@ -40,13 +40,6 @@ import {
 import { Request } from "express";
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { CalendarLink } from "@/platform/bookings/2024-08-13/outputs/calendar-links.output";
-import { BookingsRepository_2024_08_13 } from "@/platform/bookings/2024-08-13/repositories/bookings.repository";
-import { ErrorsBookingsService_2024_08_13 } from "@/platform/bookings/2024-08-13/services/errors.service";
-import { InputBookingsService_2024_08_13 } from "@/platform/bookings/2024-08-13/services/input.service";
-import { OutputBookingsService_2024_08_13 } from "@/platform/bookings/2024-08-13/services/output.service";
-import { PlatformBookingsService } from "@/platform/bookings/shared/platform-bookings.service";
-import { EventTypesRepository_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/event-types.repository";
 import { getPagination } from "@/lib/pagination/pagination";
 import { RecurringBookingService } from "@/lib/services/recurring-booking.service";
 import { RegularBookingService } from "@/lib/services/regular-booking.service";
@@ -62,6 +55,13 @@ import { TeamsEventTypesRepository } from "@/modules/teams/event-types/teams-eve
 import { TeamsRepository } from "@/modules/teams/teams/teams.repository";
 import { UsersService } from "@/modules/users/services/users.service";
 import { UsersRepository } from "@/modules/users/users.repository";
+import { CalendarLink } from "@/platform/bookings/2024-08-13/outputs/calendar-links.output";
+import { BookingsRepository_2024_08_13 } from "@/platform/bookings/2024-08-13/repositories/bookings.repository";
+import { ErrorsBookingsService_2024_08_13 } from "@/platform/bookings/2024-08-13/services/errors.service";
+import { InputBookingsService_2024_08_13 } from "@/platform/bookings/2024-08-13/services/input.service";
+import { OutputBookingsService_2024_08_13 } from "@/platform/bookings/2024-08-13/services/output.service";
+import { PlatformBookingsService } from "@/platform/bookings/shared/platform-bookings.service";
+import { EventTypesRepository_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/event-types.repository";
 
 export const BOOKING_REASSIGN_PERMISSION_ERROR = "You do not have permission to reassign this booking";
 
@@ -119,24 +119,11 @@ export class BookingsService_2024_08_13 {
       if (!eventType) {
         this.errorsBookingsService.handleEventTypeToBeBookedNotFound(body);
       }
-      const userIsEventTypeAdminOrOwner = authUser
-        ? await this.eventTypeAccessService.userIsEventTypeAdminOrOwner(authUser, eventType)
-        : false;
-      await this.checkBookingRequiresAuthenticationSetting(eventType, authUser, userIsEventTypeAdminOrOwner);
-
-      if (eventType.schedulingType === "MANAGED") {
-        throw new BadRequestException(
-          `Event type with id=${eventType.id} is the parent managed event type that can't be booked. You have to provide the child event type id aka id of event type that has been assigned to one of the users.`
-        );
-      }
-
-      if (eventType.schedulingType === "COLLECTIVE" || eventType.schedulingType === "ROUND_ROBIN") {
-        await this.checkEventTypeHasHosts(eventType.id);
-      }
+      const userIsEventTypeAdminOrOwner = await this.checkEventTypeCanBeBooked(eventType, authUser);
 
       body.eventTypeId = eventType.id;
 
-      const isRecurring = !!eventType?.recurringEvent;
+      const isRecurring = !!eventType?.recurringEvent || ("recurrence" in body && !!body.recurrence);
       const isSeated = !!eventType?.seatsPerTimeSlot;
 
       await this.hasRequiredBookingFieldsResponses(body, eventType);
@@ -155,6 +142,24 @@ export class BookingsService_2024_08_13 {
     } catch (error) {
       this.errorsBookingsService.handleBookingError(error, bookingTeamEventType);
     }
+  }
+
+  async checkEventTypeCanBeBooked(eventType: EventTypeWithOwnerAndTeam, authUser: AuthOptionalUser) {
+    const userIsEventTypeAdminOrOwner = authUser
+      ? await this.eventTypeAccessService.userIsEventTypeAdminOrOwner(authUser, eventType)
+      : false;
+    await this.checkBookingRequiresAuthenticationSetting(eventType, authUser, userIsEventTypeAdminOrOwner);
+
+    if (eventType.schedulingType === "MANAGED") {
+      throw new BadRequestException(
+        `Event type with id=${eventType.id} is the parent managed event type that can't be booked. You have to provide the child event type id aka id of event type that has been assigned to one of the users.`
+      );
+    }
+
+    if (eventType.schedulingType === "COLLECTIVE" || eventType.schedulingType === "ROUND_ROBIN") {
+      await this.checkEventTypeHasHosts(eventType.id);
+    }
+    return userIsEventTypeAdminOrOwner;
   }
 
   async checkEventTypeHasHosts(eventTypeId: number) {
@@ -761,7 +766,14 @@ export class BookingsService_2024_08_13 {
         isIndividualSeatReschedule
       );
 
-      await this.canRescheduleBooking(bookingUid);
+      const originalBooking = await this.canRescheduleBooking(bookingUid);
+      if (bookingRequest.body.eventTypeId !== originalBooking.eventTypeId) {
+        // A move to another event type books that event type, so it gets the same checks as a new booking.
+        const eventType = await this.eventTypesRepository.getEventTypeByIdWithOwnerAndTeam(
+          bookingRequest.body.eventTypeId
+        );
+        if (eventType) await this.checkEventTypeCanBeBooked(eventType, authUser);
+      }
 
       const booking = await this.regularBookingService.createBooking({
         bookingData: bookingRequest.body,
@@ -1216,7 +1228,7 @@ export class BookingsService_2024_08_13 {
         isDynamic: false,
       },
       // It can be made customizable through the API endpoint later.
-      t: await getTranslation("en", "common"),
+      t: await getTranslation("pt-BR", "common"),
     });
   }
 }

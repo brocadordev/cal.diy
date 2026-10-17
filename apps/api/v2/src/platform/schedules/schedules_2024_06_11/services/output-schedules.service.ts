@@ -1,10 +1,11 @@
-import { UsersRepository } from "@/modules/users/users.repository";
-import { Injectable } from "@nestjs/common";
-
 import type { WeekDay } from "@calcom/platform-types";
 import type { Availability, Schedule } from "@calcom/prisma/client";
+import { Injectable } from "@nestjs/common";
+import { UsersRepository } from "@/modules/users/users.repository";
 
-type DatabaseSchedule = Schedule & { availability: Availability[] };
+type DatabaseSchedule = Pick<Schedule, "id" | "userId" | "name" | "timeZone"> & {
+  availability: Pick<Availability, "days" | "startTime" | "endTime" | "date">[];
+};
 
 @Injectable()
 export class OutputSchedulesService_2024_06_11 {

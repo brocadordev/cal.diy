@@ -1,5 +1,5 @@
 import { getEnv } from "@/env";
-import { sha256Hash, isApiKey, stripApiKey } from "@/lib/api-key";
+import { sha256Hash, isAdminApiKey, isApiKey, stripApiKey } from "@/lib/api-key";
 import { Throttle } from "@/lib/endpoint-throttler-decorator";
 import { PrismaReadService } from "@/modules/prisma/prisma-read.service";
 import { ThrottlerStorageRedisService } from "@nest-lab/throttler-storage-redis";
@@ -54,6 +54,10 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     const { context } = requestProps;
     const throttleOptions = this.reflector.get(Throttle, context.getHandler());
     const request = context.switchToHttp().getRequest<Request>();
+    if (isAdminApiKey(request.get("Authorization")?.replace("Bearer ", ""))) {
+      return true;
+    }
+
     const IP = request?.headers?.["cf-connecting-ip"] ?? request?.headers?.["CF-Connecting-IP"] ?? request.ip;
     const response = context.switchToHttp().getResponse<Response>();
     const tracker = await this.getTracker(request);

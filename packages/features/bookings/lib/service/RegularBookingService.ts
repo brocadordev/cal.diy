@@ -769,13 +769,16 @@ async function handler(
     tracingLogger
   );
 
-  validateEventLength({
-    reqBodyStart: reqBody.start,
-    reqBodyEnd: reqBody.end,
-    eventTypeMultipleDuration: eventType.metadata?.multipleDuration,
-    eventTypeLength: eventType.length,
-    logger: tracingLogger,
-  });
+  // A reschedule can set any length, also one that the event type does not list.
+  if (!reqBody.rescheduleUid) {
+    validateEventLength({
+      reqBodyStart: reqBody.start,
+      reqBodyEnd: reqBody.end,
+      eventTypeMultipleDuration: eventType.metadata?.multipleDuration,
+      eventTypeLength: eventType.length,
+      logger: tracingLogger,
+    });
+  }
 
   const contactOwnerFromReq = reqBody.teamMemberEmail ?? null;
 
@@ -887,6 +890,12 @@ async function handler(
         ? eventTypeWithUsers.users.filter((user: IsFixedAwareUserWithCredentials) => user.isFixed)
         : [];
 
+      const throwOccurrenceUnavailable = (error: unknown): never => {
+        throw error instanceof Error && error.message === ErrorCode.NoAvailableUsersFound
+          ? new Error(ErrorCode.OccurrenceUnavailable)
+          : error;
+      };
+
       for (
         let i = 0;
         i < input.bookingData.allRecurringDates.length &&
@@ -909,7 +918,7 @@ async function handler(
                 },
                 tracingLogger,
                 calendarFetchMode
-              );
+              ).catch(throwOccurrenceUnavailable);
             }
           }
         } else {
@@ -924,7 +933,7 @@ async function handler(
               },
               tracingLogger,
               calendarFetchMode
-            );
+            ).catch(throwOccurrenceUnavailable);
           }
         }
       }
@@ -1200,7 +1209,8 @@ async function handler(
         organizerOrFirstDynamicGroupMemberDefaultLocationUrl = defaultApp?.appLink;
       }
     } else {
-      locationBodyString = "integrations:daily";
+      // This fork has no default video app, so a booking without any location keeps none instead of Cal Video.
+      locationBodyString = "";
     }
   }
 

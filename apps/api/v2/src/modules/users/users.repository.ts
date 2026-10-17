@@ -1,11 +1,10 @@
+import { CreationSource } from "@calcom/platform-libraries";
+import type { Prisma, Profile, Team, User } from "@calcom/prisma/client";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaReadService } from "@/modules/prisma/prisma-read.service";
 import { PrismaWriteService } from "@/modules/prisma/prisma-write.service";
 import { CreateManagedUserInput } from "@/modules/users/inputs/create-managed-user.input";
 import { UpdateManagedUserInput } from "@/modules/users/inputs/update-managed-user.input";
-import { Injectable, NotFoundException } from "@nestjs/common";
-
-import { CreationSource } from "@calcom/platform-libraries";
-import type { Profile, User, Team, Prisma } from "@calcom/prisma/client";
 
 export type UserWithProfile = User & {
   movedToProfile?: (Profile & { organization: Pick<Team, "isPlatform" | "id" | "slug" | "name"> }) | null;
@@ -14,22 +13,16 @@ export type UserWithProfile = User & {
 
 @Injectable()
 export class UsersRepository {
-  constructor(private readonly dbRead: PrismaReadService, private readonly dbWrite: PrismaWriteService) {}
+  constructor(
+    private readonly dbRead: PrismaReadService,
+    private readonly dbWrite: PrismaWriteService
+  ) {}
 
-  async create(
-    user: CreateManagedUserInput,
-    username: string,
-    oAuthClientId: string,
-    isPlatformManaged: boolean
-  ) {
+  async create(user: CreateManagedUserInput, username: string) {
     return this.dbWrite.prisma.user.create({
       data: {
         ...user,
         username,
-        platformOAuthClients: {
-          connect: { id: oAuthClientId },
-        },
-        isPlatformManaged,
         creationSource: CreationSource.API_V2,
       },
     });
@@ -51,6 +44,14 @@ export class UsersRepository {
       where: {
         id: userId,
       },
+    });
+  }
+
+  async findByChatbotUserId(chatbotUserId: string) {
+    return this.dbRead.prisma.user.findMany({
+      where: { metadata: { path: ["chatbotUserId"], equals: chatbotUserId } },
+      // two rows are enough for the caller to detect a duplicate link
+      take: 2,
     });
   }
 
@@ -177,8 +178,6 @@ export class UsersRepository {
       },
     });
   }
-
-
 
   async findByUsername(username: string, orgSlug?: string, orgId?: number) {
     return this.dbRead.prisma.user.findFirst({

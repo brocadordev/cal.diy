@@ -1,12 +1,37 @@
 import type { CreateBookingMeta, CreateRecurringBookingData } from "@calcom/features/bookings/lib/dto/types";
 import type { BookingResponse } from "@calcom/features/bookings/types";
+import logger from "@calcom/lib/logger";
+import { safeStringify } from "@calcom/lib/safeStringify";
 import { type CreationSource, SchedulingType } from "@calcom/prisma/enums";
 import type { AppsStatus } from "@calcom/types/Calendar";
+import handleCancelBooking from "../handleCancelBooking";
 import type { IBookingService } from "../interfaces/IBookingService";
 import type { RegularBookingService } from "./RegularBookingService";
+
+const log = logger.getSubLogger({ prefix: ["RecurringBookingService"] });
+
 export type BookingHandlerInput = {
   bookingData: CreateRecurringBookingData;
 } & CreateBookingMeta;
+
+async function cancelCreatedBookings(
+  bookings: BookingResponse[],
+  userId: number | undefined,
+  actionSource: string
+) {
+  for (const { uid, seatReferenceUid } of bookings) {
+    // A failed cancel must not hide the write error or stop the cancel of the next occurrences.
+    await handleCancelBooking({
+      bookingData: {
+        uid,
+        seatReferenceUid,
+        cancellationReason: "The recurring booking could not be created",
+      },
+      userId,
+      actionSource,
+    }).catch((error) => log.error(`Could not cancel the occurrence ${uid}`, safeStringify(error)));
+  }
+}
 
 export const handleNewRecurringBooking = async function (
   this: RecurringBookingService,
@@ -28,7 +53,8 @@ export const handleNewRecurringBooking = async function (
   });
   const appsStatus: AppsStatus[] | undefined = undefined;
 
-  const numSlotsToCheckForAvailability = 1;
+  // Occurrences are written one by one without a transaction, so all of them are checked before the first write.
+  const numSlotsToCheckForAvailability = data.length;
 
   let thirdPartyRecurringEventId = null;
 
@@ -112,7 +138,11 @@ export const handleNewRecurringBooking = async function (
       },
     });
 
-    const eachRecurringBooking = await promiseEachRecurringBooking;
+    // Occurrences are written one by one without a transaction, so a failed write cancels the ones already written.
+    const eachRecurringBooking = await promiseEachRecurringBooking.catch(async (error) => {
+      await cancelCreatedBookings(createdBookings, input.userId, creationSource);
+      throw error;
+    });
 
     createdBookings.push(eachRecurringBooking);
 

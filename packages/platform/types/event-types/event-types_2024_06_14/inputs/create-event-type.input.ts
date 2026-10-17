@@ -22,7 +22,6 @@ import {
   Min,
   ValidateNested,
 } from "class-validator";
-
 import { RequiresAtLeastOnePropertyWhenNotDisabled } from "../../../utils/RequiresOneOfPropertiesWhenNotDisabled";
 import { BookerActiveBookingsLimit_2024_06_14 } from "./booker-active-booking-limit.input";
 import { BookerLayouts_2024_06_14 } from "./booker-layouts.input";
@@ -199,6 +198,17 @@ export class CalVideoSettings {
     default: true,
   })
   sendTranscriptionEmails?: boolean;
+}
+
+export class EventTypeMetadata_2024_06_14 {
+  // Optional here so that the controller returns its own "is required" message.
+  @IsOptional()
+  @IsString()
+  @DocsProperty({
+    description: "ID of the chatbot service that the event type belongs to.",
+    example: "service-1",
+  })
+  chatbotServiceId?: string;
 }
 
 @CantHaveRecurrenceAndBookerActiveBookingsLimit()
@@ -592,6 +602,12 @@ export class BaseCreateEventTypeInput {
   showOptimizedSlots?: boolean;
 }
 export class CreateEventTypeInput_2024_06_14 extends BaseCreateEventTypeInput {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EventTypeMetadata_2024_06_14)
+  @DocsProperty({ type: () => EventTypeMetadata_2024_06_14 })
+  metadata?: EventTypeMetadata_2024_06_14;
+
   @IsOptional()
   @ValidateLocations_2024_06_14()
   @DocsPropertyOptional({

@@ -20,7 +20,6 @@ import {
   Min,
   ValidateNested,
 } from "class-validator";
-
 import { RequiresAtLeastOnePropertyWhenNotDisabled } from "../../../utils/RequiresOneOfPropertiesWhenNotDisabled";
 import { BookerActiveBookingsLimit_2024_06_14 } from "./booker-active-booking-limit.input";
 import { BookerLayouts_2024_06_14 } from "./booker-layouts.input";
@@ -68,6 +67,7 @@ import {
   CREATE_EVENT_LENGTH_EXAMPLE,
   CREATE_EVENT_SLUG_EXAMPLE,
   CREATE_EVENT_TITLE_EXAMPLE,
+  EventTypeMetadata_2024_06_14,
   Host,
 } from "./create-event-type.input";
 import { DestinationCalendar_2024_06_14 } from "./destination-calendar.input";
@@ -525,6 +525,15 @@ class BaseUpdateEventTypeInput {
   showOptimizedSlots?: boolean;
 }
 export class UpdateEventTypeInput_2024_06_14 extends BaseUpdateEventTypeInput {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EventTypeMetadata_2024_06_14)
+  @DocsPropertyOptional({
+    type: () => EventTypeMetadata_2024_06_14,
+    description: "If sent, it must contain chatbotServiceId.",
+  })
+  metadata?: EventTypeMetadata_2024_06_14;
+
   @IsOptional()
   @ValidateLocations_2024_06_14()
   @DocsPropertyOptional({

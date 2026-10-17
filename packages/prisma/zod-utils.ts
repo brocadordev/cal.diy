@@ -144,6 +144,8 @@ export type BookerLayoutSettings = z.infer<typeof bookerLayouts>;
 export const RequiresConfirmationThresholdUnits: z.ZodType<UnitTypeLongPlural> = z.enum(["hours", "minutes"]);
 
 const _eventTypeMetaDataSchemaWithoutApps = z.object({
+  // Fork: links the event type to a chatbot service. Without it here, every metadata parse drops the key.
+  chatbotServiceId: z.string().optional(),
   smartContractAddress: z.string().optional(),
   blockchainId: z.number().optional(),
   multipleDuration: z.number().array().optional(),

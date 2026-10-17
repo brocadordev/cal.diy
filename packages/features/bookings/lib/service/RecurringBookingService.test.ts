@@ -19,13 +19,22 @@ import { getMockRequestDataForBooking } from "@calcom/testing/lib/bookingScenari
 import { setupAndTeardown } from "@calcom/testing/lib/bookingScenario/setupAndTeardown";
 
 import { v4 as uuidv4 } from "uuid";
-import { describe, expect } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getRecurringBookingService } from "@calcom/features/bookings/di/RecurringBookingService.container";
+import type { CreateRecurringBookingData } from "@calcom/features/bookings/lib/dto/types";
+import prismaMock from "@calcom/testing/lib/__mocks__/prisma";
+import { ErrorCode } from "@calcom/lib/errorCodes";
 import { WEBAPP_URL } from "@calcom/lib/constants";
 import logger from "@calcom/lib/logger";
 import { BookingStatus } from "@calcom/prisma/enums";
 import { test } from "@calcom/testing/lib/fixtures/fixtures";
+
+import handleCancelBooking from "../handleCancelBooking";
+import { RecurringBookingService } from "./RecurringBookingService";
+import type { RegularBookingService } from "./RegularBookingService";
+
+vi.mock("../handleCancelBooking", () => ({ default: vi.fn(async () => ({})) }));
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
 
@@ -253,6 +262,120 @@ describe("handleNewRecurringBooking", () => {
         },
         timeout
       );
+    });
+
+    it.each([0, 1])(
+      "should create no booking when the occurrence %i is not available",
+      async (busyIndex) => {
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+        });
+        const plus1DateString = getDate({ dateIncrement: 1 }).dateString;
+        const firstStart = `${plus1DateString}T05:00:00.000Z`;
+        const firstEnd = `${plus1DateString}T05:30:00.000Z`;
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 30,
+                length: 30,
+                recurringEvent: getRecurrence({ type: "weekly", numberOfOccurrences: 3 }),
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: getPlusDayDate(firstStart, busyIndex).toISOString(),
+                endTime: getPlusDayDate(firstEnd, busyIndex).toISOString(),
+              },
+            ],
+            organizer,
+          })
+        );
+
+        const recurringEventId = uuidv4();
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            start: firstStart,
+            end: firstEnd,
+            recurringEventId,
+            recurringCount: 3,
+            responses: {
+              email: "booker@example.com",
+              name: "Booker",
+              location: { optionValue: "", value: "New York" },
+            },
+          },
+        });
+        const bookingData = [0, 1, 2].map((index) => ({
+          ...mockBookingData,
+          start: getPlusDayDate(firstStart, index).toISOString(),
+          end: getPlusDayDate(firstEnd, index).toISOString(),
+        }));
+
+        await expect(
+          getRecurringBookingService().createBooking({
+            bookingData,
+            bookingMeta: { userId: -1 },
+            creationSource: "WEBAPP",
+          })
+        ).rejects.toThrowError(ErrorCode.OccurrenceUnavailable);
+        expect(await prismaMock.booking.count({ where: { recurringEventId } })).toBe(0);
+      },
+      timeout
+    );
+  });
+
+  describe("Rollback:", () => {
+    it("should cancel the written occurrences and rethrow the write error when a write fails", async () => {
+      const writeError = new Error("write failed");
+      const createBooking = vi
+        .fn()
+        .mockResolvedValueOnce({ uid: "first" })
+        .mockResolvedValueOnce({ uid: "second", seatReferenceUid: "seat-of-second" })
+        .mockRejectedValueOnce(writeError);
+      vi.mocked(handleCancelBooking).mockRejectedValueOnce(new Error("cancel failed"));
+      const service = new RecurringBookingService({
+        regularBookingService: { createBooking } as unknown as RegularBookingService,
+      });
+      const occurrence = { start: "2027-01-01T10:00:00.000Z", end: "2027-01-01T10:30:00.000Z" };
+
+      await expect(
+        service.createBooking({
+          bookingData: [occurrence, occurrence, occurrence] as unknown as CreateRecurringBookingData,
+          bookingMeta: { userId: 7 },
+          creationSource: "API_V2",
+        })
+      ).rejects.toBe(writeError);
+      // The first cancel fails, and the second occurrence is still cancelled.
+      expect(vi.mocked(handleCancelBooking).mock.calls.map(([input]) => input)).toEqual([
+        {
+          bookingData: {
+            uid: "first",
+            seatReferenceUid: undefined,
+            cancellationReason: "The recurring booking could not be created",
+          },
+          userId: 7,
+          actionSource: "API_V2",
+        },
+        {
+          bookingData: {
+            uid: "second",
+            seatReferenceUid: "seat-of-second",
+            cancellationReason: "The recurring booking could not be created",
+          },
+          userId: 7,
+          actionSource: "API_V2",
+        },
+      ]);
     });
   });
 

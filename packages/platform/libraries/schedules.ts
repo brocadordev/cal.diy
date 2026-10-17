@@ -25,3 +25,5 @@ export {
 } from "@calcom/trpc/server/routers/viewer/availability/schedule/duplicate.handler";
 
 export { getScheduleByEventSlugHandler } from "@calcom/trpc/server/routers/viewer/availability/schedule/getScheduleByEventTypeSlug.handler";
+
+export { getWorkingHoursInMillis } from "@calcom/features/schedules/lib/date-ranges";

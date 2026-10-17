@@ -23,6 +23,7 @@ import {
   RescheduleSeatedBookingInput_2024_08_13,
 } from "@calcom/platform-types";
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -152,6 +153,10 @@ export class BookingsController_2024_08_13 {
     @Req() request: Request,
     @GetOptionalUser() user: AuthOptionalUser
   ): Promise<CreateBookingOutput_2024_08_13> {
+    if (!body.metadata?.chatbotBookingId) {
+      throw new BadRequestException("metadata.chatbotBookingId is required");
+    }
+
     const booking = await this.bookingsService.createBooking(request, body, user);
 
     return {

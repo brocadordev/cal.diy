@@ -1,3 +1,4 @@
+import { FrequencyInput } from "@calcom/platform-enums";
 import {
   ApiExtraModels,
   ApiHideProperty,
@@ -13,6 +14,7 @@ import {
   IsDateString,
   IsDefined,
   IsEnum,
+  IsIn,
   IsInt,
   IsObject,
   IsOptional,
@@ -20,6 +22,7 @@ import {
   IsTimeZone,
   IsUrl,
   isEmail,
+  Max,
   Min,
   registerDecorator,
   Validate,
@@ -131,7 +134,7 @@ export class BaseBookingAttendee {
     enum: BookingLanguage,
     description: "The preferred language of the attendee. Used for booking confirmation.",
     example: BookingLanguage.it,
-    default: BookingLanguage.en,
+    default: BookingLanguage["pt-BR"],
   })
   @IsEnum(BookingLanguage)
   @IsOptional()
@@ -409,7 +412,34 @@ export class CreateBookingInput_2024_08_13 {
   rrHostSubsetIds?: number[];
 }
 
+const BOOKING_RECURRENCE_FREQUENCIES = [FrequencyInput.daily, FrequencyInput.weekly, FrequencyInput.monthly];
+
+export class BookingRecurrence_2024_08_13 {
+  @ApiProperty({ enum: BOOKING_RECURRENCE_FREQUENCIES, example: FrequencyInput.weekly })
+  @IsIn(BOOKING_RECURRENCE_FREQUENCIES)
+  frequency!: FrequencyInput.daily | FrequencyInput.weekly | FrequencyInput.monthly;
+
+  @ApiProperty({
+    example: 10,
+    description:
+      "The number of calendar dates to make, from the start date. For daily and monthly, the dates outside the working hours of the user are not booked. For all frequencies, the dates with a holiday block of the user are not booked.",
+  })
+  @IsInt()
+  @Min(2)
+  @Max(366)
+  count!: number;
+}
+
 export class CreateRecurringBookingInput_2024_08_13 extends CreateBookingInput_2024_08_13 {
+  @ApiPropertyOptional({
+    type: BookingRecurrence_2024_08_13,
+    description: "Repeats the booking. The event type does not need a recurrence.",
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BookingRecurrence_2024_08_13)
+  recurrence?: BookingRecurrence_2024_08_13;
+
   @ApiPropertyOptional({
     type: Number,
     description: `The number of recurrences. If not provided then event type recurrence count will be used. Can't be more than

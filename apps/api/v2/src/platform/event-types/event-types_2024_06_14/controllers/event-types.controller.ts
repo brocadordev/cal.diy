@@ -10,6 +10,7 @@ import {
   UpdateEventTypeInput_2024_06_14,
 } from "@calcom/platform-types";
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -25,16 +26,6 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiHeader, ApiOperation, ApiTags as DocsTags } from "@nestjs/swagger";
-import { CreateEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/create-event-type.output";
-import { DeleteEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/delete-event-type.output";
-import { GetEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/get-event-type.output";
-import { GetEventTypesOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/get-event-types.output";
-import { UpdateEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/update-event-type.output";
-import { EventTypeResponseTransformPipe } from "@/platform/event-types/event-types_2024_06_14/pipes/event-type-response.transformer";
-import { EventTypesService_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/services/event-types.service";
-import { InputEventTypesService_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/services/input-event-types.service";
-import type { DatabaseEventType } from "@/platform/event-types/event-types_2024_06_14/services/output-event-types.service";
-import { OutputEventTypesService_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/services/output-event-types.service";
 import { VERSION_2024_06_14_VALUE } from "@/lib/api-versions";
 import {
   API_KEY_OR_ACCESS_TOKEN_HEADER,
@@ -55,6 +46,18 @@ import { ApiAuthGuardUser } from "@/modules/auth/strategies/api-auth/api-auth.st
 import { OutputTeamEventTypesResponsePipe } from "@/modules/teams/event-types/pipes/output-team-event-types-response.pipe";
 import type { DatabaseTeamEventType } from "@/modules/teams/event-types/services/output-team-event-types.service";
 import { UserWithProfile } from "@/modules/users/users.repository";
+import { CreateEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/create-event-type.output";
+import { DeleteEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/delete-event-type.output";
+import { GetEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/get-event-type.output";
+import { GetEventTypesOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/get-event-types.output";
+import { UpdateEventTypeOutput_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/outputs/update-event-type.output";
+import { EventTypeResponseTransformPipe } from "@/platform/event-types/event-types_2024_06_14/pipes/event-type-response.transformer";
+import { EventTypesService_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/services/event-types.service";
+import { InputEventTypesService_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/services/input-event-types.service";
+import type { DatabaseEventType } from "@/platform/event-types/event-types_2024_06_14/services/output-event-types.service";
+import { OutputEventTypesService_2024_06_14 } from "@/platform/event-types/event-types_2024_06_14/services/output-event-types.service";
+
+const CHATBOT_SERVICE_ID_REQUIRED = "metadata.chatbotServiceId is required";
 
 @Controller({
   path: "/v2/event-types",
@@ -92,6 +95,10 @@ export class EventTypesController_2024_06_14 {
     @Body() body: CreateEventTypeInput_2024_06_14,
     @GetUser() user: UserWithProfile
   ): Promise<CreateEventTypeOutput_2024_06_14> {
+    if (!body.metadata?.chatbotServiceId) {
+      throw new BadRequestException(CHATBOT_SERVICE_ID_REQUIRED);
+    }
+
     const transformedBody = await this.inputEventTypesService.transformAndValidateCreateEventTypeInput(
       user,
       body
@@ -192,6 +199,10 @@ export class EventTypesController_2024_06_14 {
     @Body() body: UpdateEventTypeInput_2024_06_14,
     @GetUser() user: UserWithProfile
   ): Promise<UpdateEventTypeOutput_2024_06_14> {
+    if (body.metadata && !body.metadata.chatbotServiceId) {
+      throw new BadRequestException(CHATBOT_SERVICE_ID_REQUIRED);
+    }
+
     const transformedBody = await this.inputEventTypesService.transformAndValidateUpdateEventTypeInput(
       body,
       user,

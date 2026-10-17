@@ -9,6 +9,7 @@ export enum ErrorCode {
   // Domain-specific error codes
   PaymentCreationFailure = "payment_not_created_error",
   NoAvailableUsersFound = "no_available_users_found_error",
+  OccurrenceUnavailable = "occurrence_unavailable",
   // Thrown when charging a card fails (e.g., insufficient funds, card declined during actual payment)
   ChargeCardFailure = "couldnt_charge_card_error",
   // Thrown when collecting/verifying a payment method fails (e.g., card setup failed during HOLD payment flow)

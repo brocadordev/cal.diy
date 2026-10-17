@@ -1,5 +1,15 @@
 import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsArray, IsDateString, IsInt, IsOptional, IsString, isEmail, Validate } from "class-validator";
+import {
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  isEmail,
+  Min,
+  Validate,
+} from "class-validator";
 
 export const RESCHEDULED_BY_DOCS = `Email of the person who is rescheduling the booking - only needed when rescheduling a booking that requires a confirmation.
 If event type owner email is provided then rescheduled booking will be automatically confirmed. If attendee email or no email is passed then the event type
@@ -36,6 +46,35 @@ export class RescheduleBookingInput_2024_08_13 {
     example: "123456",
   })
   emailVerificationCode?: string;
+
+  @IsOptional()
+  @IsInt()
+  @ApiPropertyOptional({
+    example: 123,
+    description:
+      "Moves the booking to this event type. The owner of the event type becomes the host. If not provided, the booking keeps its event type.",
+  })
+  eventTypeId?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @ApiPropertyOptional({
+    example: 45,
+    description:
+      "The length of the new booking. The event type does not need to list it. If not provided, the length of the event type is used.",
+  })
+  lengthInMinutes?: number;
+
+  @IsOptional()
+  @IsObject()
+  @ApiPropertyOptional({
+    type: Object,
+    example: { customField: "customValue" },
+    description:
+      "Booking field responses to add to the booking. Use them to fill the required booking fields of the new event type when eventTypeId is provided. They do not change the existing responses.",
+  })
+  bookingFieldsResponses?: Record<string, unknown>;
 
   @ApiHideProperty()
   @IsOptional()

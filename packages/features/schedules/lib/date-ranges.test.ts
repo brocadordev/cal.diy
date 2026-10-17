@@ -4,6 +4,7 @@ import dayjs from "@calcom/dayjs";
 
 import {
   buildDateRanges,
+  getWorkingHoursInMillis,
   intersect,
   processDateOverride,
   processWorkingHours,
@@ -1258,5 +1259,37 @@ describe("intersect function comprehensive tests", () => {
       expect(result[1].end.toISOString()).toBe("2024-06-01T12:30:00.000Z"); // Correct: no extension
       expect(result.find((r) => r.start.toISOString() === "2024-06-02T04:00:00.000Z")).toBeUndefined(); // Correct: June 2 excluded
     });
+  });
+});
+
+describe("getWorkingHoursInMillis", () => {
+  it("gives the working hours and the date overrides of a schedule in millis", () => {
+    const ranges = getWorkingHoursInMillis({
+      availability: [
+        // Monday to Friday, 09:00 to 17:00.
+        {
+          days: [1, 2, 3, 4, 5],
+          startTime: new Date(Date.UTC(0, 0, 0, 9, 0)),
+          endTime: new Date(Date.UTC(0, 0, 0, 17, 0)),
+        },
+        // Monday 4 January 2027 only from 10:00 to 12:00.
+        {
+          date: new Date(Date.UTC(2027, 0, 4)),
+          startTime: new Date(Date.UTC(0, 0, 0, 10, 0)),
+          endTime: new Date(Date.UTC(0, 0, 0, 12, 0)),
+        },
+      ],
+      timeZone: "America/Sao_Paulo",
+      dateFrom: new Date("2027-01-01T09:00:00-03:00"),
+      dateTo: new Date("2027-01-04T18:00:00-03:00"),
+    });
+    const isInside = (start: string, end: string) =>
+      ranges.some((range) => range.start <= Date.parse(start) && Date.parse(end) <= range.end);
+
+    expect(isInside("2027-01-01T15:00:00-03:00", "2027-01-01T16:00:00-03:00")).toBe(true);
+    expect(isInside("2027-01-01T16:30:00-03:00", "2027-01-01T17:30:00-03:00")).toBe(false);
+    expect(isInside("2027-01-02T10:00:00-03:00", "2027-01-02T11:00:00-03:00")).toBe(false);
+    expect(isInside("2027-01-04T10:00:00-03:00", "2027-01-04T11:00:00-03:00")).toBe(true);
+    expect(isInside("2027-01-04T15:00:00-03:00", "2027-01-04T16:00:00-03:00")).toBe(false);
   });
 });

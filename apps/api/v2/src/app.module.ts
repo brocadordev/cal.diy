@@ -5,6 +5,7 @@ import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { seconds, ThrottlerModule } from "@nestjs/throttler";
 import { SentryGlobalFilter, SentryModule } from "@sentry/nestjs/setup";
+import { json } from "body-parser";
 import { AppController } from "./app.controller";
 import appConfig from "@/config/app";
 import { CustomThrottlerGuard } from "@/lib/throttler-guard";
@@ -35,7 +36,8 @@ import { VercelWebhookController } from "@/vercel-webhook.controller";
 
     RedisModule,
     BullModule.forRoot({
-      redis: `${process.env.REDIS_URL}${process.env.NODE_ENV === "production" ? "?tls=true" : ""}`,
+      // Bull ignores the rediss:// scheme, so TLS must come from the URL query. A plain redis:// URL stays without TLS.
+      redis: `${process.env.REDIS_URL}${process.env.REDIS_URL?.startsWith("rediss://") ? "?tls=true" : ""}`,
     }),
     ThrottlerModule.forRootAsync({
       imports: [RedisModule],
@@ -109,6 +111,18 @@ export class AppModule implements NestModule {
         },
         {
           path: "/api/v2/auth/oauth2/token",
+          method: RequestMethod.POST,
+        }
+      )
+      // A bulk reschedule has no item limit, so its body can pass the 100 kB default. The global parser skips a parsed body.
+      .apply(json({ limit: "5mb" }))
+      .forRoutes(
+        {
+          path: "/v2/bookings/bulk-reschedule",
+          method: RequestMethod.POST,
+        },
+        {
+          path: "/api/v2/bookings/bulk-reschedule",
           method: RequestMethod.POST,
         }
       )
